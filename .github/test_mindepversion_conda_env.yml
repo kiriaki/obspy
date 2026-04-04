@@ -1,12 +1,11 @@
 name: test
 channels:
   - conda-forge
-  - defaults
 dependencies:
   # obspy
-  - numpy=1.20
-  - scipy=1.7
-  - matplotlib=3.3
+  - numpy=1.25
+  - scipy=1.11
+  - matplotlib=3.8
   - decorator
   - lxml
   - requests
@@ -17,10 +16,11 @@ dependencies:
   # soft dependencies
   - cartopy
   - geographiclib
-  - pyshp
+  # pinning != 3.0.0 - see #3600
+  - pyshp != 3.0.0
   # tests
   - packaging
-  - pyproj
+  - pyproj < 3.5
   - pytest
   - pytest-cov
   - pytest-json-report >= 1.4

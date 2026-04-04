@@ -22,6 +22,7 @@ from obspy.core.utcdatetime import UTCDateTime
 from obspy.core.util import AttribDict, create_empty_data_chunk, NUMPY_VERSION
 from obspy.core.util.base import _get_function_from_entry_point
 from obspy.core.util.decorator import raise_if_masked, skip_if_no_data
+from obspy.core.util.deprecation_helpers import ObsPyDeprecationWarning
 from obspy.core.util.misc import (flat_not_masked_contiguous, get_window_times,
                                   limit_numpy_fft_cache)
 
@@ -142,7 +143,7 @@ class Stats(AttribDict):
 
     """
     # set of read only attrs
-    readonly = ['endtime']
+    readonly = {'endtime'}
     # default values
     defaults = {
         'sampling_rate': 1.0,
@@ -174,35 +175,37 @@ class Stats(AttribDict):
     def __setitem__(self, key, value):
         """
         """
+        self_dict = self.__dict__
         if key in self._refresh_keys:
             # ensure correct data type
             if key == 'delta':
-                key = 'sampling_rate'
                 try:
-                    value = 1.0 / float(value)
+                    sampling_rate = 1.0 / float(value)
                 except ZeroDivisionError:
-                    value = 0.0
+                    sampling_rate = 0.0
+                self_dict['sampling_rate'] = sampling_rate
             elif key == 'sampling_rate':
-                value = float(value)
+                self_dict['sampling_rate'] = float(value)
             elif key == 'starttime':
-                value = UTCDateTime(value)
+                if isinstance(value, UTCDateTime):
+                    starttime = UTCDateTime(ns=value.ns)
+                else:
+                    starttime = UTCDateTime(value)
+                self_dict['starttime'] = starttime
             elif key == 'npts':
-                if not isinstance(value, int):
-                    value = int(value)
-            # set current key
-            super(Stats, self).__setitem__(key, value)
+                self_dict['npts'] = int(value)
             # set derived value: delta
             try:
-                delta = 1.0 / float(self.sampling_rate)
+                delta = 1.0 / float(self_dict['sampling_rate'])
             except ZeroDivisionError:
-                delta = 0
-            self.__dict__['delta'] = delta
+                delta = 0.0
+            self_dict['delta'] = delta
+
             # set derived value: endtime
-            if self.npts == 0:
-                timediff = 0
-            else:
-                timediff = float(self.npts - 1) * delta
-            self.__dict__['endtime'] = self.starttime + timediff
+            npts = self_dict['npts']
+            timediff = 0 if npts == 0 else float(npts - 1) * delta
+            endtime_ns = self_dict['starttime'].ns + int(round(timediff * 1e9))
+            self_dict['endtime'] = UTCDateTime(ns=endtime_ns)
             return
         if key == 'component':
             key = 'channel'
@@ -212,7 +215,7 @@ class Stats(AttribDict):
                 raise ValueError(msg)
             value = self.channel[:-1] + value
         # prevent a calibration factor of 0
-        if key == 'calib' and value == 0:
+        elif key == 'calib' and value == 0:
             msg = 'Calibration factor set to 0.0!'
             warnings.warn(msg, UserWarning)
         # all other keys
@@ -228,8 +231,7 @@ class Stats(AttribDict):
         """
         if key == 'component':
             return super(Stats, self).__getitem__('channel', default)[-1:]
-        else:
-            return super(Stats, self).__getitem__(key, default)
+        return super(Stats, self).__getitem__(key, default)
 
     def __str__(self):
         """
@@ -335,8 +337,9 @@ class Trace(object):
         # set some defaults if not set yet
         if header is None:
             header = {}
-        header = deepcopy(header)
-        header.setdefault('npts', len(data))
+        else:
+            header = copy(header)
+        header.setdefault('npts', data.size)
         self.stats = Stats(header)
         # set data without changing npts in stats object (for headonly option)
         super(Trace, self).__setattr__('data', data)
@@ -2658,27 +2661,16 @@ seismometer_correction_simulation.html#using-a-resp-file>`_.
 
     def attach_response(self, inventories):
         """
+        This method is deprecated and will be removed in a future release.
+        Pass metadata via the ``inventory`` argument of
+        :meth:`obspy.core.trace.Trace.remove_response` or
+        :meth:`obspy.core.trace.Trace.remove_sensitivity` instead.
+
         Search for and attach channel response to the trace as
         :class:`obspy.core.trace.Trace`.stats.response. Raises an exception
         if no matching response can be found.
         To subsequently deconvolve the instrument response use
         :meth:`obspy.core.trace.Trace.remove_response`.
-
-        >>> from obspy import read, read_inventory
-        >>> st = read()
-        >>> tr = st[0]
-        >>> inv = read_inventory()
-        >>> tr.attach_response(inv)
-        >>> print(tr.stats.response)  \
-                # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-        Channel Response
-           From M/S (Velocity in Meters per Second) to COUNTS (Digital Counts)
-           Overall Sensitivity: 2.5168e+09 defined at 0.020 Hz
-           4 stages:
-              Stage 1: PolesZerosResponseStage from M/S to V, gain: 1500
-              Stage 2: CoefficientsTypeResponseStage from V to COUNTS, ...
-              Stage 3: FIRResponseStage from COUNTS to COUNTS, gain: 1
-              Stage 4: FIRResponseStage from COUNTS to COUNTS, gain: 1
 
         :type inventories: :class:`~obspy.core.inventory.inventory.Inventory`
             or :class:`~obspy.core.inventory.network.Network` or a list
@@ -2687,6 +2679,10 @@ seismometer_correction_simulation.html#using-a-resp-file>`_.
         :param inventories: Station metadata to use in search for response for
             each trace in the stream.
         """
+        msg = ("Trace.attach_response() is deprecated and will be removed in "
+               "a future release. Pass metadata via the `inventory` argument "
+               "of remove_response() or remove_sensitivity() instead.")
+        warnings.warn(msg, ObsPyDeprecationWarning, stacklevel=2)
         self.stats.response = self._get_response(inventories)
 
     @_add_processing_info
@@ -2788,8 +2784,7 @@ seismometer_correction_simulation.html#using-a-resp-file>`_.
             or None.
         :param inventory: Station metadata to use in search for adequate
             response. If inventory parameter is not supplied, the response
-            has to be attached to the trace with
-            :meth:`obspy.core.trace.Trace.attach_response` beforehand.
+            has to be attached to the trace beforehand.
         :type output: str
         :param output: Output units. One of:
 
@@ -2843,26 +2838,37 @@ seismometer_correction_simulation.html#using-a-resp-file>`_.
             import matplotlib.pyplot as plt
 
         response = self._get_response(inventory)
+
         # polynomial response using blockette 62 stage 0
         if not response.response_stages and response.instrument_polynomial:
             coefficients = response.instrument_polynomial.coefficients
             self.data = np.poly1d(coefficients[::-1])(self.data)
             return self
 
-        # polynomial response using blockette 62 stage 1 and no other stages
-        if len(response.response_stages) == 1 and \
-           isinstance(response.response_stages[0], PolynomialResponseStage):
-            # check for gain
-            if response.response_stages[0].stage_gain is None:
-                msg = 'Stage gain not defined for %s - setting it to 1.0'
-                warnings.warn(msg % self.id)
-                gain = 1
+        # cannot handle polynomial response we can still replicate
+        # linear (1 or 2 coeffs) instances
+        if isinstance(response.response_stages[0], PolynomialResponseStage):
+            if len(response.response_stages) == 1:
+                if response.response_stages[0].stage_gain is None:
+                    msg = "Stage gain not defined for %s - setting it to 1.0"
+                    warnings.warn(msg % self.id)
+                    gain = 1
+                else:
+                    gain = response.response_stages[0].stage_gain
             else:
-                gain = response.response_stages[0].stage_gain
-            coefficients = response.response_stages[0].coefficients[:]
-            for i in range(len(coefficients)):
-                coefficients[i] /= math.pow(gain, i)
-            self.data = np.poly1d(coefficients[::-1])(self.data)
+                # multiple stages, will need to calculate overall sensitivity
+                if not response.instrument_sensitivity:
+                    # this will abort of more than 2 inst_poly.coeffs
+                    response.recalculate_overall_sensitivity()
+                gain = response.instrument_sensitivity.value
+
+            coefficients = response.response_stages[0].coefficients
+            # can do a simple divide if linear
+            self.data = self.data / gain
+            # attempt to account for DC offset also
+            if len(coefficients) >= 1 and coefficients[0] != 0:
+                self.data = self.data + coefficients[0]
+
             return self
 
         # use evalresp
@@ -3012,8 +3018,7 @@ seismometer_correction_simulation.html#using-a-resp-file>`_.
             or None.
         :param inventory: Station metadata to use in search for adequate
             response. If inventory parameter is not supplied, the response
-            has to be attached to the trace with
-            :meth:`obspy.core.trace.Trace.attach_response` beforehand.
+            has to be attached to the trace beforehand.
 
         .. rubric:: Example
 
@@ -3023,7 +3028,14 @@ seismometer_correction_simulation.html#using-a-resp-file>`_.
         >>> tr.remove_sensitivity(inv)  # doctest: +ELLIPSIS
         <...Trace object at 0x...>
         """
+        from obspy.core.inventory import PolynomialResponseStage
+
         response = self._get_response(inventory)
+        if (isinstance(response.response_stages[0],
+                       PolynomialResponseStage) and not
+                response.instrument_sensitivity):
+            response.recalculate_overall_sensitivity()
+
         self.data = self.data / response.instrument_sensitivity.value
         return self
 

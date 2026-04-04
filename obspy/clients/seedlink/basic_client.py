@@ -11,11 +11,13 @@ SeedLink request client for ObsPy.
 import fnmatch
 import warnings
 
+import numpy as np
 from lxml import etree
 
 from obspy import Stream
 from .slclient import SLClient, SLPacket
 from .client.seedlinkconnection import SeedLinkConnection
+from obspy.io.mseed.core import _read_mseed
 
 
 class Client(object):
@@ -74,38 +76,32 @@ class Client(object):
         >>> from obspy import UTCDateTime
         >>> client = Client('rtserver.ipgp.fr')
         >>> t = UTCDateTime() - 1500
-        >>> st = client.get_waveforms("G", "FDFM", "00", "BHZ", t, t + 5)
+        >>> st = client.get_waveforms("G", "FDFM", "10", "BHZ", t, t + 5)
         >>> print(st)  # doctest: +ELLIPSIS
         1 Trace(s) in Stream:
-        G.FDFM.00.BHZ | 20... | 20.0 Hz, ... samples
+        G.FDFM.10.BHZ | 20... | 20.0 Hz, ... samples
 
         Most servers support '?' single-character wildcard in location and
         channel code fields:
 
-        >>> st = client.get_waveforms("G", "FDFM", "??", "B??", t, t + 5)
+        >>> st = client.get_waveforms("G", "FDFM", "1?", "B??", t, t + 5)
         >>> st = st.sort(reverse=True)
         >>> print(st)  # doctest: +ELLIPSIS
-        6 Trace(s) in Stream:
+        3 Trace(s) in Stream:
         G.FDFM.10.BHZ | 20... | 20.0 Hz, ... samples
         G.FDFM.10.BHN | 20... | 20.0 Hz, ... samples
         G.FDFM.10.BHE | 20... | 20.0 Hz, ... samples
-        G.FDFM.00.BHZ | 20... | 20.0 Hz, ... samples
-        G.FDFM.00.BHN | 20... | 20.0 Hz, ... samples
-        G.FDFM.00.BHE | 20... | 20.0 Hz, ... samples
 
         Depending on server capabilities, '*' multi-character wildcards might
         work in any parameter:
 
-        >>> st = client.get_waveforms("*", "FDFM", "*", "B*", t, t + 5)
+        >>> st = client.get_waveforms("*", "FDFM", "1*", "B*", t, t + 5)
         >>> st = st.sort(reverse=True)
         >>> print(st)  # doctest: +ELLIPSIS
-        6 Trace(s) in Stream:
+        3 Trace(s) in Stream:
         G.FDFM.10.BHZ | 20... | 20.0 Hz, ... samples
         G.FDFM.10.BHN | 20... | 20.0 Hz, ... samples
         G.FDFM.10.BHE | 20... | 20.0 Hz, ... samples
-        G.FDFM.00.BHZ | 20... | 20.0 Hz, ... samples
-        G.FDFM.00.BHN | 20... | 20.0 Hz, ... samples
-        G.FDFM.00.BHE | 20... | 20.0 Hz, ... samples
 
         .. note::
 
@@ -185,11 +181,19 @@ class Client(object):
         self._connect()
         self._slclient.initialize()
         self.stream = Stream()
-        self._slclient.run(packet_handler=self._packet_handler)
-        stream = self.stream
+
+        # holds all data received by the client
+        self.bulk_data_container = list()
+
+        self._slclient.run(packet_handler=self._fast_packet_handler)
+
+        # process the data all in one go, much more efficient
+        input = np.concatenate(self.bulk_data_container)
+        self.bulk_data_container = list()
+        stream = _read_mseed(input)
+
         stream.trim(starttime, endtime)
         self.stream = None
-        stream.sort()
         return stream
 
     def get_info(self, network=None, station=None, location=None, channel=None,
@@ -205,11 +209,10 @@ class Client(object):
         >>> print(info)
         [('G', 'FDFM')]
         >>> info = client.get_info(
-        ...     station="FD?M", channel='*Z', level='channel')
+        ...     station="FD?M", channel='[LBH]HZ', location='10',
+        ...     level='channel')
         >>> print(info)  # doctest: +NORMALIZE_WHITESPACE
-        [('G', 'FDFM', '00', 'BHZ'), ('G', 'FDFM', '00', 'HHZ'),
-         ('G', 'FDFM', '00', 'HNZ'), ('G', 'FDFM', '00', 'LHZ'),
-         ('G', 'FDFM', '10', 'BHZ'), ('G', 'FDFM', '10', 'HHZ'),
+        [('G', 'FDFM', '10', 'BHZ'), ('G', 'FDFM', '10', 'HHZ'),
          ('G', 'FDFM', '10', 'LHZ')]
 
         Available station information is cached after the first request to the
@@ -381,6 +384,46 @@ class Client(object):
         # new samples add to the main stream which is then trimmed
         self.stream += trace
         self.stream.merge(-1)
+        return False
+
+    def _fast_packet_handler(self, count, slpack):
+        """
+        Custom packet handler that accumulates all received data in a
+        list of numpy arrays. These can then be converted in one go,
+        reducing the processing time up to 90% compared to
+        _packet_handler().
+        """
+        # check if not a complete packet
+        if slpack is None or (slpack == SLPacket.SLNOPACKET) or \
+                (slpack == SLPacket.SLERROR):
+            return False
+
+        # get basic packet info
+        type_ = slpack.get_type()
+        if self.debug:
+            print(type_)
+
+        # process INFO packets here
+        if type_ == SLPacket.TYPE_SLINF:
+            if self.debug:
+                print(SLPacket.TYPE_SLINF)
+            return False
+        elif type_ == SLPacket.TYPE_SLINFT:
+            if self.debug:
+                print("Complete INFO:",
+                      self._slclient.slconn.get_info_string())
+            return True
+
+        # process packet data
+        msr_record = slpack.msrecord
+        if msr_record is None:
+            if self.debug:
+                print("Blockette contains no trace")
+            return False
+
+        # add to bulk_data_container
+        self.bulk_data_container.append(np.frombuffer(msr_record,
+                                        dtype=np.int8))
         return False
 
 

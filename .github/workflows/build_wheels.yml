@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        build: [cp38, cp39, cp310, cp311, cp312]
+        build: [cp38, cp39, cp310, cp311, cp312, cp313, cp314]
         exclude-flag:
           - ${{ github.ref_name == 'master' && github.event_name == 'push' }}
         exclude:
@@ -42,8 +42,12 @@ jobs:
             exclude-flag: true
           - build: cp311
             exclude-flag: true
+          - build: cp312
+            exclude-flag: true
+          - build: cp313
+            exclude-flag: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -61,9 +65,9 @@ jobs:
           echo "CIBW_TEST_COMMAND: $CIBW_TEST_COMMAND"
 
       - name: Build and test wheels
-        uses: pypa/cibuildwheel@v2.21.3
+        uses: pypa/cibuildwheel@v3.3.1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           path: ./wheelhouse/*.whl
           name: wheel-${{ matrix.os }}-${{ matrix.build }}
@@ -73,7 +77,7 @@ jobs:
     name: build sdist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -81,7 +85,7 @@ jobs:
         shell: bash -l {0}
         run: pipx run build --sdist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           path: dist/*.tar.gz
           name: sdist
@@ -91,7 +95,7 @@ jobs:
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/upload-artifact/merge@v4
+      - uses: actions/upload-artifact/merge@v7
         with:
           name: artifact
           delete-merged: true
@@ -102,13 +106,14 @@ jobs:
     needs: merge_artifacts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: artifact
           path: dist
 
-      - uses: pypa/gh-action-pypi-publish@v1.12.2
+      - uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
+          verbose: true
           user: __token__
           password: ${{ secrets.TESTPYPI }}
           repository_url: https://test.pypi.org/legacy/
@@ -119,11 +124,11 @@ jobs:
     needs: merge_artifacts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: artifact
           path: dist
-      - uses: pypa/gh-action-pypi-publish@v1.12.2
+      - uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           user: __token__
           password: ${{ secrets.PYPI }}

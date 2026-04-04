@@ -13,18 +13,12 @@ import copy
 import logging
 import os
 import shutil
-import sys
 import tempfile
+from http.client import HTTPException
 from socket import timeout as socket_timeout
 from unittest import mock
 
 import pytest
-
-if sys.version_info.major == 2:
-    from httplib import HTTPException
-else:
-    from http.client import HTTPException
-
 import numpy as np
 
 import obspy
@@ -2546,7 +2540,7 @@ class TestDownloadHelper():
     @mock.patch("logging.Logger.warning")
     def test_initialization_detailed(self, log_w, log_p, patch):
         def side_effect(self, *args, **kwargs):
-            if "iris" in self.base_url:
+            if "earthscope" in self.base_url:
                 self.services = {"dataselect": "dummy"}
             elif "gfz" in self.base_url:
                 raise socket_timeout("Random Error")
@@ -2602,9 +2596,10 @@ class TestDownloadHelper():
         assert patch.call_count == 2
 
         assert list(d._initialized_clients.keys()) == \
-            ['GFZ', 'http://service.iris.edu', 'ORFEUS']
+            ['GFZ', 'https://service.earthscope.org', 'ORFEUS']
         # Make sure it is the same object.
-        assert d._initialized_clients["http://service.iris.edu"] is client
+        assert d._initialized_clients["https://service.earthscope.org"] \
+            is client
 
     @mock.patch("obspy.clients.fdsn.client.Client._discover_services",
                 autospec=True)
