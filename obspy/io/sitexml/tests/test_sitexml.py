@@ -1168,21 +1168,17 @@ class TestSiteXML():
             xml = fh.read()
 
         class FakeResponse:
-            def __enter__(self):
-                return self
+            content = xml
 
-            def __exit__(self, exc_type, exc_value, traceback):
-                return False
+            def raise_for_status(self):
+                pass
 
-            def read(self):
-                return xml
-
-        def fake_urlopen(url, timeout):
+        def fake_get(url, timeout):
             assert url == "https://example.org/site.xml"
             assert timeout == 30
             return FakeResponse()
 
-        monkeypatch.setattr(sitexml_module, "urlopen", fake_urlopen)
+        monkeypatch.setattr(sitexml_module.requests, "get", fake_get)
 
         sera_site = read_sitexml("https://example.org/site.xml")
 

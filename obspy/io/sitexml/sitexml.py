@@ -12,14 +12,13 @@ Metadata is stored in a SERASite object.
 
 import io
 import re
+import requests
 import sys
 import warnings
-from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import unquote, urlparse
-from urllib.request import urlopen
 
 from lxml import etree
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import obspy
 from obspy.core.inventory.util import ExternalReference
@@ -57,9 +56,10 @@ def _url_to_bytesio(url):
     :rtype: io.BytesIO
     """
     try:
-        with urlopen(url, timeout=30) as response:
-            return io.BytesIO(response.read())
-    except (HTTPError, URLError, TimeoutError, OSError) as e:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        return io.BytesIO(response.content)
+    except requests.RequestException as e:
         raise SiteXMLIOError(
             "Could not retrieve SiteXML URL '%s': %s" % (url, e)
         )
