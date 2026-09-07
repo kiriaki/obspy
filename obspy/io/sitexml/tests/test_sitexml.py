@@ -327,11 +327,11 @@ class TestSiteXML():
             sera_site.set_preferred_velocity_profile(
                 "quakeml:domain.ab/velocity_profile/missing")
 
-    def test_get_indicator_object(self, testdata):
+    def test_get_indicator_object(self, testdata_recursive):
         """
         Indicator lookup uses site description and preferred analysis context.
         """
-        sera_site = read_sitexml(testdata["full_sitexml.xml"])
+        sera_site = read_sitexml(testdata_recursive["full_sitexml.xml"])
 
         assert sera_site.get_indicator_object("siteClassEC8") is (
             sera_site.site_description.ec8)
@@ -551,11 +551,13 @@ class TestSiteXML():
                 match="preferred_velocity_profileID does not belong"):
             sera_site.validate_references()
 
-    def test_site_indicator_calculates_quality_index1(self, testdata):
+    def test_site_indicator_calculates_quality_index1(
+            self, testdata_recursive):
         """
         Site indicators can calculate and store their Q_Index1 value.
         """
-        sera_site = read_sitexml(testdata["full_site_description.xml"])
+        sera_site = read_sitexml(
+            testdata_recursive["full_site_description.xml"])
         ec8 = sera_site.site_description.ec8
 
         value = ec8.calculate_quality_index1(
@@ -584,11 +586,11 @@ class TestSiteXML():
             with pytest.raises(SiteXMLValidationError, match="quality_index"):
                 ec8.quality_index = value
 
-    def test_sera_site_calculates_quality_indexes(self, testdata):
+    def test_sera_site_calculates_quality_indexes(self, testdata_recursive):
         """
         SERASite exposes convenience methods for Q2, Q3, and overall QI.
         """
-        sera_site = read_sitexml(testdata["full_sitexml.xml"])
+        sera_site = read_sitexml(testdata_recursive["full_sitexml.xml"])
 
         q2 = sera_site.calculate_quality_index2()
         q3 = sera_site.calculate_quality_index3(
@@ -620,11 +622,11 @@ class TestSiteXML():
         assert sera_site.has_indicators()
 
     def test_sera_site_quality_index3_uses_provided_consistency_pairs(
-            self, testdata):
+            self, testdata_recursive):
         """
         Q_Index3 averages only consistency pairs that are provided.
         """
-        sera_site = read_sitexml(testdata["full_sitexml.xml"])
+        sera_site = read_sitexml(testdata_recursive["full_sitexml.xml"])
 
         q3 = sera_site.calculate_quality_index3(
             f0_vs30=1,
@@ -633,11 +635,11 @@ class TestSiteXML():
         assert q3 == 0.5
 
     def test_sera_site_overall_quality_index_treats_missing_q3_as_zero(
-            self, testdata):
+            self, testdata_recursive):
         """
         Missing Q_Index3 is zero for the overall quality-index formula.
         """
-        sera_site = read_sitexml(testdata["full_sitexml.xml"])
+        sera_site = read_sitexml(testdata_recursive["full_sitexml.xml"])
 
         q2 = sera_site.calculate_quality_index2()
         overall = sera_site.calculate_overall_quality_index()
@@ -810,11 +812,12 @@ class TestSiteXML():
                                match="network.station"):
                 self._minimal_sera_site(station_code=station_code)
 
-    def test_station_code_schema_rejects_invalid_notation(self, testdata):
+    def test_station_code_schema_rejects_invalid_notation(
+            self, testdata_recursive):
         """
         The SiteXML schema rejects the same invalid station notation.
         """
-        xml = testdata["full_site_description.xml"].read_text(
+        xml = testdata_recursive["full_site_description.xml"].read_text(
             encoding="utf-8")
         xml = xml.replace("<station>XX.ABCD</station>",
                           "<station>XXX.ABCD</station>")
@@ -823,11 +826,11 @@ class TestSiteXML():
             read_sitexml(io.BytesIO(xml.encode("utf-8")))
 
     def test_station_code_schema_accepts_alphanumeric_notation(
-            self, testdata):
+            self, testdata_recursive):
         """
         The SiteXML schema accepts uppercase alphanumeric station notation.
         """
-        xml = testdata["full_site_description.xml"].read_text(
+        xml = testdata_recursive["full_site_description.xml"].read_text(
             encoding="utf-8")
         xml = xml.replace("<station>XX.ABCD</station>",
                           "<station>X1.ABC2</station>")
@@ -836,11 +839,12 @@ class TestSiteXML():
 
         assert site.site_description.station_code == "X1.ABC2"
 
-    def test_schema_accepts_revision_history(self, testdata):
+    def test_schema_accepts_revision_history(self, testdata_recursive):
         """
         The SiteXML schema accepts root-level document revision history.
         """
-        xml = testdata["minimal_sitexml.xml"].read_text(encoding="utf-8")
+        xml = testdata_recursive["minimal_sitexml.xml"].read_text(
+            encoding="utf-8")
         revision_history = (
             """
     <revisionHistory>
@@ -867,6 +871,8 @@ class TestSiteXML():
         assert valid
         assert errors == ()
 
+    # TODOs: To be removed if _package_data_path()
+    # is updated to not suppport PyInstaller bundles.
     def test_package_data_path_supports_pyinstaller_bundle(
             self, tmp_path, monkeypatch):
         """
@@ -1109,14 +1115,14 @@ class TestSiteXML():
         self._assert_site_xml_equality(
             new_xml_file_buffer, orig_xml_file_buffer)
 
-    def test_is_sitexml(self, testdata, datapath):
+    def test_is_sitexml(self, testdata_recursive, datapath):
         """
         Tests the _is_sitexml() function.
         """
         # Check positives.
         sitexmls = [
-            testdata["full_sitexml.xml"],
-            testdata["full_site_description_without_station.xml"],
+            testdata_recursive["full_sitexml.xml"],
+            testdata_recursive["full_site_description_without_station.xml"],
         ]
         for stat in sitexmls:
             assert _is_sitexml(stat)
@@ -1130,19 +1136,20 @@ class TestSiteXML():
         # for stat in not_sitexmls:
         #    assert not _is_sitexml(stat)
 
-    def test_read_and_write_minimal_file(self, testdata):
+    def test_read_and_write_minimal_file(self, testdata_recursive):
         """
         Test that reading and writing of a minimal SiteXML document,
         with the least possible tags, works.
         """
-        filename = testdata["minimal_sitexml.xml"]
+        filename = testdata_recursive["minimal_sitexml.xml"]
         sera_site = read_sitexml(filename)
 
         # Write it again. Also validate it to get more confidence.
         self._write_and_compare(filename, sera_site)
 
-    def test_read_sitexml_accepts_seekable_file_like_objects(self, testdata):
-        filename = testdata["minimal_sitexml.xml"]
+    def test_read_sitexml_accepts_seekable_file_like_objects(
+            self, testdata_recursive):
+        filename = testdata_recursive["minimal_sitexml.xml"]
 
         with open(filename, "rb") as fh:
             xml_buffer = io.BytesIO(fh.read())
@@ -1153,8 +1160,9 @@ class TestSiteXML():
         assert sera_site.site_owner is not None
         assert sera_site.site_description is not None
 
-    def test_read_sitexml_accepts_http_url(self, testdata, monkeypatch):
-        filename = testdata["minimal_sitexml.xml"]
+    def test_read_sitexml_accepts_http_url(
+            self, testdata_recursive, monkeypatch):
+        filename = testdata_recursive["minimal_sitexml.xml"]
 
         with open(filename, "rb") as fh:
             xml = fh.read()
@@ -1621,8 +1629,8 @@ class TestSiteXML():
         (None, "Flat"),
     ])
     def test_write_site_topography_requires_at_least_one_schema(
-            self, testdata, topography_a, topography_b):
-        filename = testdata["minimal_sitexml.xml"]
+            self, testdata_recursive, topography_a, topography_b):
+        filename = testdata_recursive["minimal_sitexml.xml"]
         sera_site = read_sitexml(filename)
         sera_site.site_description.topographyA = topography_a
         sera_site.site_description.topographyB = topography_b
@@ -1631,8 +1639,8 @@ class TestSiteXML():
         write_sitexml(sera_site, xml_buffer, validate=True)
 
     def test_write_sitexml_validates_analysis_site_description_reference(
-            self, testdata):
-        sera_site = read_sitexml(testdata["full_analysis.xml"])
+            self, testdata_recursive):
+        sera_site = read_sitexml(testdata_recursive["full_analysis.xml"])
         sera_site.analysis[0].site_descriptionID = (
             "quakeml:domain.ab/site_description/does-not-match")
 
@@ -1641,8 +1649,8 @@ class TestSiteXML():
             write_sitexml(sera_site, io.BytesIO(), validate=True)
 
     def test_write_sitexml_validates_preferred_analysis_reference(
-            self, testdata):
-        sera_site = read_sitexml(testdata["full_analysis.xml"])
+            self, testdata_recursive):
+        sera_site = read_sitexml(testdata_recursive["full_analysis.xml"])
         sera_site.site_description.preferred_site_analysisID = (
             "quakeml:domain.ab/analysis/missing")
 
@@ -1651,8 +1659,8 @@ class TestSiteXML():
             write_sitexml(sera_site, io.BytesIO(), validate=True)
 
     def test_write_sitexml_validates_preferred_velocity_profile_reference(
-            self, testdata):
-        sera_site = read_sitexml(testdata["full_analysis.xml"])
+            self, testdata_recursive):
+        sera_site = read_sitexml(testdata_recursive["full_analysis.xml"])
         sera_site.site_description.preferred_velocity_profileID = (
             "quakeml:domain.ab/velocity_profile/missing")
 
@@ -1661,8 +1669,9 @@ class TestSiteXML():
                 match="preferred_velocity_profileID"):
             write_sitexml(sera_site, io.BytesIO(), validate=True)
 
-    def test_write_sitexml_validates_duplicate_analysis_ids(self, testdata):
-        sera_site = read_sitexml(testdata["full_analysis.xml"])
+    def test_write_sitexml_validates_duplicate_analysis_ids(
+            self, testdata_recursive):
+        sera_site = read_sitexml(testdata_recursive["full_analysis.xml"])
         duplicate_analysis = sera_site.analysis[0].copy()
         sera_site.analysis.append(duplicate_analysis)
 
@@ -1672,8 +1681,8 @@ class TestSiteXML():
             write_sitexml(sera_site, io.BytesIO(), validate=True)
 
     def test_write_sitexml_validates_duplicate_velocity_profile_ids(
-            self, testdata):
-        sera_site = read_sitexml(testdata["full_analysis.xml"])
+            self, testdata_recursive):
+        sera_site = read_sitexml(testdata_recursive["full_analysis.xml"])
         velocity_profiles = (
             sera_site.analysis[0].velocity_profile_set.velocity_profiles)
         velocity_profiles[1].resource_id = velocity_profiles[0].resource_id
@@ -1683,22 +1692,22 @@ class TestSiteXML():
                 match="Duplicate velocity profile resource_id"):
             write_sitexml(sera_site, io.BytesIO(), validate=True)
 
-    def test_read_and_write_full_file(self, testdata):
+    def test_read_and_write_full_file(self, testdata_recursive):
         """
         Test that reading and writing of a full SiteXML document with all
         possible tags works.
         """
-        filename = testdata["full_sitexml.xml"]
+        filename = testdata_recursive["full_sitexml.xml"]
         sera_site = read_sitexml(filename)
 
         # Write it again. Also validate it to get more confidence.
         self._write_and_compare(filename, sera_site)
 
-    def test_reading_and_writing_full_site_owner_tag(self, testdata):
+    def test_reading_and_writing_full_site_owner_tag(self, testdata_recursive):
         """
         Tests reading and writing a full SiteXML <siteOwner> tag.
         """
-        filename = testdata["full_site_owner.xml"]
+        filename = testdata_recursive["full_site_owner.xml"]
         sera_site = read_sitexml(filename)
 
         assert sera_site.site_owner.owner_codename == "SITEOWNER"
@@ -1735,11 +1744,12 @@ class TestSiteXML():
         # Write it again and compare to the original file.
         self._write_and_compare(filename, sera_site)
 
-    def test_reading_and_writing_full_site_description_tag(self, testdata):
+    def test_reading_and_writing_full_site_description_tag(
+            self, testdata_recursive):
         """
         Tests reading and writing a full SiteXML <siteDescription> tag.
         """
-        filename = testdata["full_site_description.xml"]
+        filename = testdata_recursive["full_site_description.xml"]
         sera_site = read_sitexml(filename)
 
         assert sera_site.site_description is not None
@@ -1803,11 +1813,11 @@ class TestSiteXML():
         self._write_and_compare(filename, sera_site)
 
     def test_reading_missing_site_indicator_quality_index_preserves_none(
-            self, testdata):
+            self, testdata_recursive):
         """
         Missing optional qualityIndex stays None in the object model.
         """
-        filename = testdata["full_site_description.xml"]
+        filename = testdata_recursive["full_site_description.xml"]
         xml = filename.read_bytes().replace(
             b"                <qualityIndex>1.0</qualityIndex>\n",
             b"",
@@ -1818,11 +1828,11 @@ class TestSiteXML():
         assert sera_site.site_description.ec8.quality_index is None
 
     def test_reading_missing_velocity_profile_quality_index_preserves_none(
-            self, testdata):
+            self, testdata_recursive):
         """
         Missing optional velocityProfileSet qualityIndex stays None.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         xml = filename.read_bytes().replace(
             b"            <qualityIndex>1.0</qualityIndex>\n",
             b"",
@@ -1833,12 +1843,13 @@ class TestSiteXML():
         assert sera_site.analysis[0].velocity_profile_set.quality_index is None
 
     def test_reading_and_writing_full_site_description_without_station_tag(
-            self, testdata):
+            self, testdata_recursive):
         """
         Tests reading and writing a full SiteXML <siteDescription> tag for a
         site without a station installation.
         """
-        filename = testdata["full_site_description_without_station.xml"]
+        filename = testdata_recursive[
+            "full_site_description_without_station.xml"]
         sera_site = read_sitexml(filename)
 
         assert sera_site.site_description is not None
@@ -1877,11 +1888,11 @@ class TestSiteXML():
         # Write it again and compare to the original file.
         self._write_and_compare(filename, sera_site)
 
-    def test_reading_and_writing_full_analysis_tag(self, testdata):
+    def test_reading_and_writing_full_analysis_tag(self, testdata_recursive):
         """
         Tests reading and writing a full SiteXML <analysis> tag.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         sera_site = read_sitexml(filename)
 
         # Test that a preferred analysis ID is provided
@@ -1939,11 +1950,11 @@ class TestSiteXML():
         # Write it again and compare to the original file.
         self._write_and_compare(filename, sera_site)
 
-    def test_read_analysis_without_creation_time(self, testdata):
+    def test_read_analysis_without_creation_time(self, testdata_recursive):
         """
         Tests reading a schema-valid <analysis> without optional creationTime.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         with open(filename, "rb") as fh:
             xml = fh.read()
 
@@ -1958,11 +1969,12 @@ class TestSiteXML():
         assert len(sera_site.analysis) == 1
         assert sera_site.analysis[0].creation_date is None
 
-    def test_reading_and_writing_velocity_profile_tag(self, testdata):
+    def test_reading_and_writing_velocity_profile_tag(
+            self, testdata_recursive):
         """
         Tests reading and writing a full SiteXML <velocityProfileSet> tag.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         sera_site = read_sitexml(filename)
 
         assert sera_site.analysis[0] is not None
@@ -2011,12 +2023,13 @@ class TestSiteXML():
         # Write it again and compare to the original file.
         self._write_and_compare(filename, sera_site)
 
-    def test_reading_reference_only_velocity_profile_set(self, testdata):
+    def test_reading_reference_only_velocity_profile_set(
+            self, testdata_recursive):
         """
         A velocityProfileSet can point to supporting literature without
         embedding velocity profile layer values.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         xml = filename.read_bytes()
         xml = xml.replace(
             b"        <preferredVelocityProfileID>"
@@ -2048,11 +2061,11 @@ class TestSiteXML():
         assert velocity_profile_set.quality_index is None
 
     def test_reading_velocity_profile_validates_layer_count(
-            self, testdata, tmp_path):
+            self, testdata_recursive, tmp_path):
         """
         Tests that layerCount matches the number of velocityProfileData items.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         invalid_xml = tmp_path / "invalid_layer_count.xml"
         invalid_xml.write_text(
             filename.read_text().replace(
@@ -2065,12 +2078,12 @@ class TestSiteXML():
             read_sitexml(invalid_xml)
 
     def test_reading_velocity_profile_without_layer_count(
-            self, testdata, tmp_path):
+            self, testdata_recursive, tmp_path):
         """
         Tests that missing layerCount is derived
         from velocityProfileData items.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         xml_text = filename.read_text(encoding="utf-8")
         invalid_xml = tmp_path / "missing_layer_count.xml"
         invalid_xml.write_text(
@@ -2083,11 +2096,11 @@ class TestSiteXML():
         assert len(vp.velocity_profile_data) == 8
 
     def test_reading_velocity_profile_requires_velocity_s(
-            self, testdata, tmp_path):
+            self, testdata_recursive, tmp_path):
         """
         Tests that velocityProfileData requires velocityS.
         """
-        filename = testdata["full_analysis.xml"]
+        filename = testdata_recursive["full_analysis.xml"]
         xml_text = filename.read_text(encoding="utf-8")
         invalid_xml = tmp_path / "missing_velocity_s.xml"
         invalid_xml.write_text(
@@ -2150,11 +2163,11 @@ class TestSiteXML():
 
         assert profile.layer_count == 2
 
-    def test_reading_twice_raises_no_warning(self, testdata):
+    def test_reading_twice_raises_no_warning(self, testdata_recursive):
         """
         Tests that reading a siteXML file twice does not raise a warnings.
         """
-        filename = testdata['full_analysis.xml']
+        filename = testdata_recursive['full_analysis.xml']
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -2165,12 +2178,12 @@ class TestSiteXML():
 
         assert site1 == site2
 
-    def test_deepcopy(self, testdata):
+    def test_deepcopy(self, testdata_recursive):
         """
         Tests that creating a deep copy of a siteXML object
         results in two identical objects.
         """
-        filename = testdata['full_sitexml.xml']
+        filename = testdata_recursive['full_sitexml.xml']
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")

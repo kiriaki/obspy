@@ -6,7 +6,7 @@ import pytest
 
 
 @pytest.fixture(scope='module')
-def testdata(datapath):
+def testdata_recursive(datapath):
     """
     Dictionary with full paths to SiteXML test files by filename.
 
